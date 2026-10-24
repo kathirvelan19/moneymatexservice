@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import '../models/expense.dart';
-import '../models/category.dart';
 import '../models/payment_method.dart';
 import '../models/scanned_receipt.dart';
 import '../models/scanned_upi.dart';

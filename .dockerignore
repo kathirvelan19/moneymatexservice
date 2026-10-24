@@ -1,0 +1,12 @@
+.git
+.github
+.idea
+.vscode
+flutter_app/
+target/
+**/target/
+*.class
+*.jar
+.env
+.env.*
+*.local
