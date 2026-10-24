@@ -23,13 +23,60 @@ public class GeminiAiService {
     private static final Logger log = LoggerFactory.getLogger(GeminiAiService.class);
 
     @Value("${gemini.api.key:}")
-    private String apiKey;
+    private String rawApiKey;
 
-    @Value("${gemini.api.model:gemini-3.6-flash}")
+    @Value("${gemini.api.model:gemini-2.5-flash}")
     private String modelName;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newHttpClient();
+
+    private String getApiKey() {
+        return rawApiKey != null ? rawApiKey.trim() : "";
+    }
+
+    public boolean isConfigured() {
+        return !getApiKey().isBlank();
+    }
+
+    public String getMaskedApiKey() {
+        String key = getApiKey();
+        if (key.isBlank()) return "NOT_CONFIGURED";
+        if (key.length() <= 8) return "KEY_TOO_SHORT";
+        return key.substring(0, 6) + "..." + key.substring(key.length() - 4);
+    }
+
+    public Map<String, Object> testConnection() {
+        String key = getApiKey();
+        if (key.isBlank()) {
+            return Map.of(
+                    "status", "ERROR",
+                    "configured", false,
+                    "message", "Gemini API key is not configured in environment (GEMINI_API_KEY is empty)"
+            );
+        }
+
+        try {
+            String prompt = "Reply with {\"status\":\"OK\"}";
+            String res = callGeminiApiTextOnly(prompt);
+            return Map.of(
+                    "status", "SUCCESS",
+                    "configured", true,
+                    "model", modelName,
+                    "keyMasked", getMaskedApiKey(),
+                    "response", res
+            );
+        } catch (Exception e) {
+            log.error("Gemini key connectivity test failed", e);
+            return Map.of(
+                    "status", "FAILED",
+                    "configured", true,
+                    "model", modelName,
+                    "keyMasked", getMaskedApiKey(),
+                    "error", e.getMessage() != null ? e.getMessage() : "Unknown error"
+            );
+        }
+    }
 
     private static final Map<String, Category> KEYWORD_CATEGORIES = Map.ofEntries(
             // Food
@@ -419,7 +466,7 @@ public class GeminiAiService {
     }
 
     private String callGeminiApiWithImage(String base64Data, String promptText) throws Exception {
-        String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", modelName, apiKey);
+        String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", modelName, getApiKey());
 
         Map<String, Object> inlineData = Map.of(
                 "mimeType", "image/jpeg",
@@ -449,7 +496,7 @@ public class GeminiAiService {
     }
 
     private String callGeminiApiTextOnly(String promptText) throws Exception {
-        String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", modelName, apiKey);
+        String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", modelName, getApiKey());
 
         Map<String, Object> textPart = Map.of("text", promptText);
         Map<String, Object> content = Map.of("parts", List.of(textPart));

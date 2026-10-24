@@ -3,11 +3,11 @@
 /// Supports compile-time configuration via `--dart-define=API_BASE_URL=https://YOUR-RENDER-SERVICE.onrender.com`
 /// while maintaining safe defaults and URL normalization.
 class ApiConfig {
-  /// Default placeholder for the deployed Render service.
-  /// Set via `--dart-define=API_BASE_URL=https://YOUR-RENDER-SERVICE.onrender.com`
+  /// Default URL for the deployed Render service.
+  /// Can be overridden at build time via `--dart-define=API_BASE_URL=https://moneymatexservice.onrender.com`
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://YOUR-RENDER-SERVICE.onrender.com',
+    defaultValue: 'https://moneymatexservice.onrender.com',
   );
 
   /// Returns the base URL with whitespace and trailing slashes stripped.
