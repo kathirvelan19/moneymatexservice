@@ -1,6 +1,8 @@
 import 'category.dart';
 
 class DetectedPayment {
+  final bool valid;
+  final String? message;
   final String id;
   final double amount;
   final String merchant;
@@ -14,6 +16,8 @@ class DetectedPayment {
   bool isLogged;
 
   DetectedPayment({
+    this.valid = true,
+    this.message,
     required this.id,
     required this.amount,
     required this.merchant,
@@ -28,6 +32,10 @@ class DetectedPayment {
   });
 
   factory DetectedPayment.fromJson(Map<String, dynamic> json) {
+    final isValid = json['valid'] as bool? ??
+        json['isValid'] as bool? ??
+        (((json['paidAmount'] as num?)?.toDouble() ?? (json['amount'] as num?)?.toDouble() ?? 0.0) > 0);
+
     Category cat = Category.Others;
     if (json['autoCategorized'] != null) {
       final catStr = json['autoCategorized'].toString();
@@ -45,6 +53,8 @@ class DetectedPayment {
     }
 
     return DetectedPayment(
+      valid: isValid,
+      message: json['message'] as String? ?? json['errorMessage'] as String?,
       id: json['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
       amount: (json['paidAmount'] as num?)?.toDouble() ?? (json['amount'] as num?)?.toDouble() ?? 0.0,
       merchant: json['merchant'] ?? json['receiverName'] ?? 'Unknown Merchant',

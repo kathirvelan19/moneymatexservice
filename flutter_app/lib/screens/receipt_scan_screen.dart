@@ -101,15 +101,26 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen>
 
       if (!mounted) return;
       if (result != null) {
-        setState(() {
-          _isScanning = false;
-          _scannedResult = result;
-          _populateForm(result);
-        });
+        if (!result.valid || result.totalAmount <= 0) {
+          setState(() {
+            _isScanning = false;
+            _scannedResult = null;
+            _errorMessage = result.message ??
+                'No receipt detected. The uploaded image does not appear to be a valid bill or receipt. Please upload a clear photo of a printed receipt or invoice.';
+          });
+        } else {
+          setState(() {
+            _isScanning = false;
+            _scannedResult = result;
+            _populateForm(result);
+          });
+        }
       } else {
         setState(() {
           _isScanning = false;
-          _errorMessage = provider.errorMessage ?? 'Unable to parse receipt. Please verify image or try again.';
+          _scannedResult = null;
+          _errorMessage = provider.errorMessage ??
+              'No receipt detected. The uploaded image does not appear to be a valid bill or receipt. Please upload a clear photo.';
         });
       }
     } catch (e) {
@@ -407,7 +418,12 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen>
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(color: const Color(0xFF5E43A5), width: 1.5),
                                   ),
-                                  child: const Icon(Icons.receipt, size: 48, color: Color(0xFF5E43A5)),
+                                  child: _selectedImageBytes != null
+                                      ? ClipRRect(
+                                          borderRadius: BorderRadius.circular(10),
+                                          child: Image.memory(_selectedImageBytes!, width: 140, height: 100, fit: BoxFit.cover),
+                                        )
+                                      : const Icon(Icons.receipt, size: 48, color: Color(0xFF5E43A5)),
                                 ),
                                 AnimatedBuilder(
                                   animation: _scannerAnimController,
@@ -441,6 +457,14 @@ class _ReceiptScanScreenState extends State<ReceiptScanScreen>
                             textAlign: TextAlign.center,
                             style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF5E43A5), fontSize: 14),
                           ),
+                          if (_selectedSampleName != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                'Sample: $_selectedSampleName',
+                                style: const TextStyle(color: Color(0xFF888496), fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            ),
                           const SizedBox(height: 8),
                           const Text(
                             'Extracting store name, totals, GST tax, and transaction dates',

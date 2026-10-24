@@ -99,15 +99,26 @@ class _UpiScanScreenState extends State<UpiScanScreen>
 
       if (!mounted) return;
       if (result != null) {
-        setState(() {
-          _isScanning = false;
-          _scannedResult = result;
-          _populateForm(result);
-        });
+        if (!result.valid || result.paidAmount <= 0) {
+          setState(() {
+            _isScanning = false;
+            _scannedResult = null;
+            _errorMessage = result.message ??
+                'No payment details detected. The uploaded image does not appear to be a UPI transaction screenshot. Please upload a clear payment confirmation.';
+          });
+        } else {
+          setState(() {
+            _isScanning = false;
+            _scannedResult = result;
+            _populateForm(result);
+          });
+        }
       } else {
         setState(() {
           _isScanning = false;
-          _errorMessage = provider.errorMessage ?? 'Could not parse UPI screenshot. Please try another image.';
+          _scannedResult = null;
+          _errorMessage = provider.errorMessage ??
+              'No payment details found. The uploaded image does not appear to be a UPI payment confirmation screenshot.';
         });
       }
     } catch (e) {
@@ -412,11 +423,24 @@ class _UpiScanScreenState extends State<UpiScanScreen>
                                     width: 2,
                                   ),
                                 ),
-                                child: const Icon(Icons.qr_code, color: Color(0xFF00BA88), size: 36),
+                                child: _selectedImageBytes != null
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(40),
+                                        child: Image.memory(_selectedImageBytes!, width: 80, height: 80, fit: BoxFit.cover),
+                                      )
+                                    : const Icon(Icons.qr_code, color: Color(0xFF00BA88), size: 36),
                               );
                             },
                           ),
                           const SizedBox(height: 20),
+                          if (_selectedSampleName != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Text(
+                                'Sample: $_selectedSampleName',
+                                style: const TextStyle(color: Color(0xFF888496), fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            ),
                           Text(
                             _scanStatusText,
                             textAlign: TextAlign.center,

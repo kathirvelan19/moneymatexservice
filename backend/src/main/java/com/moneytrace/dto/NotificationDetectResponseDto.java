@@ -4,6 +4,8 @@ import com.moneytrace.model.Category;
 import java.time.LocalDate;
 
 public class NotificationDetectResponseDto {
+    private boolean valid = true;
+    private String message;
     private double paidAmount;
     private String merchant;
     private String paymentApp;
@@ -16,7 +18,9 @@ public class NotificationDetectResponseDto {
 
     public NotificationDetectResponseDto() {}
 
-    public NotificationDetectResponseDto(double paidAmount, String merchant, String paymentApp, String transactionId, LocalDate dateTime, Category autoCategorized, boolean isDebit, String rawMessage, String summary) {
+    public NotificationDetectResponseDto(boolean valid, String message, double paidAmount, String merchant, String paymentApp, String transactionId, LocalDate dateTime, Category autoCategorized, boolean isDebit, String rawMessage, String summary) {
+        this.valid = valid;
+        this.message = message;
         this.paidAmount = paidAmount;
         this.merchant = merchant;
         this.paymentApp = paymentApp;
@@ -33,16 +37,20 @@ public class NotificationDetectResponseDto {
     }
 
     public static class Builder {
+        private boolean valid = true;
+        private String message;
         private double paidAmount;
         private String merchant;
         private String paymentApp;
         private String transactionId;
         private LocalDate dateTime;
         private Category autoCategorized;
-        private boolean isDebit;
+        private boolean isDebit = true;
         private String rawMessage;
         private String summary;
 
+        public Builder valid(boolean valid) { this.valid = valid; return this; }
+        public Builder message(String message) { this.message = message; return this; }
         public Builder paidAmount(double paidAmount) { this.paidAmount = paidAmount; return this; }
         public Builder merchant(String merchant) { this.merchant = merchant; return this; }
         public Builder paymentApp(String paymentApp) { this.paymentApp = paymentApp; return this; }
@@ -54,9 +62,15 @@ public class NotificationDetectResponseDto {
         public Builder summary(String summary) { this.summary = summary; return this; }
 
         public NotificationDetectResponseDto build() {
-            return new NotificationDetectResponseDto(paidAmount, merchant, paymentApp, transactionId, dateTime, autoCategorized, isDebit, rawMessage, summary);
+            return new NotificationDetectResponseDto(valid, message, paidAmount, merchant, paymentApp, transactionId, dateTime, autoCategorized, isDebit, rawMessage, summary);
         }
     }
+
+    public boolean isValid() { return valid; }
+    public void setValid(boolean valid) { this.valid = valid; }
+
+    public String getMessage() { return message; }
+    public void setMessage(String message) { this.message = message; }
 
     public double getPaidAmount() { return paidAmount; }
     public void setPaidAmount(double paidAmount) { this.paidAmount = paidAmount; }

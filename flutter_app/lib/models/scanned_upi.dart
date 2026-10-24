@@ -1,6 +1,8 @@
 import 'category.dart';
 
 class ScannedUPI {
+  final bool valid;
+  final String? message;
   final double paidAmount;
   final String receiverName;
   final DateTime dateTime;
@@ -9,6 +11,8 @@ class ScannedUPI {
   final Category autoCategorized;
 
   ScannedUPI({
+    this.valid = true,
+    this.message,
     required this.paidAmount,
     required this.receiverName,
     required this.dateTime,
@@ -18,7 +22,13 @@ class ScannedUPI {
   });
 
   factory ScannedUPI.fromJson(Map<String, dynamic> json) {
+    final isValid = json['valid'] as bool? ??
+        json['isValid'] as bool? ??
+        ((json['paidAmount'] as num?)?.toDouble() ?? 0.0) > 0;
+
     return ScannedUPI(
+      valid: isValid,
+      message: json['message'] as String? ?? json['errorMessage'] as String?,
       paidAmount: (json['paidAmount'] as num? ?? 0.0).toDouble(),
       receiverName: json['receiverName'] as String? ?? 'Unknown Receiver',
       dateTime: DateTime.parse(json['dateTime'] as String? ?? DateTime.now().toIso8601String()),

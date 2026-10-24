@@ -193,20 +193,37 @@ public class GeminiAiService {
     public ReceiptScanResponseDto scanReceipt(String base64Image) {
         try {
             String cleanedImage = cleanBase64(base64Image);
-            String prompt = "Extract receipt data into raw JSON with keys: " +
-                    "merchantName (string), " +
-                    "date (YYYY-MM-DD string), " +
-                    "totalAmount (number), " +
-                    "taxAmount (number), " +
-                    "category (string, must be one of: Food, Travel, Shopping, Bills, Recharge, Entertainment, Healthcare, Others). " +
+            String prompt = "You are an expert OCR receipt parser. Examine this image carefully.\n" +
+                    "First check: Is this image actually a bill, purchase receipt, tax invoice, or payment voucher?\n" +
+                    "If the image is NOT a receipt or bill (for example: a random selfie, animal, scenery, person, meme, object, non-bill document, blank, or completely blurry/unreadable image):\n" +
+                    "Return ONLY this raw JSON:\n" +
+                    "{\"isValid\": false, \"message\": \"No receipt detected. The uploaded image does not appear to be a valid bill or receipt. Please upload a clear photo of a printed receipt or invoice.\"}\n\n" +
+                    "If it IS a valid receipt:\n" +
+                    "Return raw JSON with keys:\n" +
+                    "{\"isValid\": true, \"merchantName\": (string), \"date\": (YYYY-MM-DD string), \"totalAmount\": (number), \"taxAmount\": (number), \"category\": (one of Food, Travel, Shopping, Bills, Recharge, Entertainment, Healthcare, Others), \"message\": null}.\n" +
                     "Carefully inspect items, store name, and type to accurately categorize the expense. Return raw JSON only.";
 
             String jsonResponse = callGeminiApiWithImage(cleanedImage, prompt);
             JsonNode root = objectMapper.readTree(jsonResponse);
 
-            String merchant = root.path("merchantName").asText("Unknown Merchant");
-            String dateStr = root.path("date").asText(LocalDate.now().toString());
+            boolean isValid = root.path("isValid").asBoolean(true);
             double total = root.path("totalAmount").asDouble(0.0);
+
+            if (!isValid || total <= 0) {
+                String errMsg = root.hasNonNull("message") ? root.path("message").asText() :
+                        "No receipt detected. The uploaded image does not appear to be a bill or receipt.";
+                return ReceiptScanResponseDto.builder()
+                        .valid(false)
+                        .message(errMsg)
+                        .merchantName(null)
+                        .totalAmount(0.0)
+                        .originalImageBase64(base64Image)
+                        .autoCategorized(Category.Others)
+                        .build();
+            }
+
+            String merchant = root.path("merchantName").asText("Store");
+            String dateStr = root.path("date").asText(LocalDate.now().toString());
             double tax = root.path("taxAmount").asDouble(0.0);
             String rawCategory = root.hasNonNull("category") ? root.path("category").asText() : null;
 
@@ -218,6 +235,8 @@ public class GeminiAiService {
             }
 
             return ReceiptScanResponseDto.builder()
+                    .valid(true)
+                    .message("Receipt parsed successfully")
                     .merchantName(merchant)
                     .date(date)
                     .totalAmount(total)
@@ -227,38 +246,55 @@ public class GeminiAiService {
                     .build();
 
         } catch (Exception e) {
-            log.warn("Gemini OCR parsing encountered issue: {}. Activating resilient intelligent fallback.", e.getMessage());
+            log.warn("Gemini OCR parsing encountered issue: {}. Returning truthful error.", e.getMessage());
             return fallbackReceiptScan(base64Image);
         }
     }
 
     private ReceiptScanResponseDto fallbackReceiptScan(String base64Image) {
         return ReceiptScanResponseDto.builder()
-                .merchantName("Reliance Fresh & Mart")
-                .date(LocalDate.now())
-                .totalAmount(485.50)
-                .taxAmount(24.25)
+                .valid(false)
+                .message("Could not detect any receipt details in the uploaded image. Please ensure you upload a clear, well-lit photo of a receipt or bill.")
+                .merchantName(null)
+                .totalAmount(0.0)
                 .originalImageBase64(base64Image)
-                .autoCategorized(Category.Food)
+                .autoCategorized(Category.Others)
                 .build();
     }
 
     public UpiScanResponseDto scanUpiScreenshot(String base64Image) {
         try {
             String cleanedImage = cleanBase64(base64Image);
-            String prompt = "Extract UPI transaction data into raw JSON with keys: " +
-                    "paidAmount (number), " +
-                    "receiverName (string), " +
-                    "dateTime (YYYY-MM-DD string), " +
-                    "transactionId (string), " +
-                    "category (string, must be one of: Food, Travel, Shopping, Bills, Recharge, Entertainment, Healthcare, Others). " +
+            String prompt = "You are an expert UPI payment receipt analyzer. Examine this image carefully.\n" +
+                    "First check: Is this image a payment confirmation screenshot (from Google Pay, PhonePe, Paytm, BHIM, CRED, or bank UPI apps showing a completed transaction)?\n" +
+                    "If the image is NOT a payment confirmation screenshot (for example: a random photo, personal picture, scenery, social media chat, or non-payment screen):\n" +
+                    "Return ONLY this raw JSON:\n" +
+                    "{\"isValid\": false, \"message\": \"No payment details found. The uploaded image does not appear to be a UPI payment confirmation screenshot. Please upload a clear screenshot of your completed transaction.\"}\n\n" +
+                    "If it IS a valid payment screenshot:\n" +
+                    "Return raw JSON with keys:\n" +
+                    "{\"isValid\": true, \"paidAmount\": (number), \"receiverName\": (string), \"dateTime\": (YYYY-MM-DD string), \"transactionId\": (string), \"category\": (one of Food, Travel, Shopping, Bills, Recharge, Entertainment, Healthcare, Others), \"message\": null}.\n" +
                     "Accurately infer category from receiver name, payment note/remarks, or merchant logos. Return raw JSON only.";
 
             String jsonResponse = callGeminiApiWithImage(cleanedImage, prompt);
             JsonNode root = objectMapper.readTree(jsonResponse);
 
+            boolean isValid = root.path("isValid").asBoolean(true);
             double amount = root.path("paidAmount").asDouble(0.0);
-            String receiver = root.path("receiverName").asText("Unknown Receiver");
+
+            if (!isValid || amount <= 0) {
+                String errMsg = root.hasNonNull("message") ? root.path("message").asText() :
+                        "No payment details found. The uploaded image does not appear to be a UPI payment confirmation screenshot.";
+                return UpiScanResponseDto.builder()
+                        .valid(false)
+                        .message(errMsg)
+                        .receiverName(null)
+                        .paidAmount(0.0)
+                        .originalImageBase64(base64Image)
+                        .autoCategorized(Category.Others)
+                        .build();
+            }
+
+            String receiver = root.path("receiverName").asText("Recipient");
             String dateStr = root.path("dateTime").asText(LocalDate.now().toString());
             String txnId = root.path("transactionId").asText("N/A");
             String rawCategory = root.hasNonNull("category") ? root.path("category").asText() : null;
@@ -271,6 +307,8 @@ public class GeminiAiService {
             }
 
             return UpiScanResponseDto.builder()
+                    .valid(true)
+                    .message("UPI payment details parsed successfully")
                     .paidAmount(amount)
                     .receiverName(receiver)
                     .dateTime(date)
@@ -280,20 +318,19 @@ public class GeminiAiService {
                     .build();
 
         } catch (Exception e) {
-            log.warn("Gemini UPI screenshot parsing encountered issue: {}. Activating resilient intelligent fallback.", e.getMessage());
+            log.warn("Gemini UPI screenshot parsing encountered issue: {}. Returning truthful error.", e.getMessage());
             return fallbackUpiScan(base64Image);
         }
     }
 
     private UpiScanResponseDto fallbackUpiScan(String base64Image) {
-        long randomTxn = 100000000000L + (long)(Math.random() * 899999999999L);
         return UpiScanResponseDto.builder()
-                .paidAmount(350.00)
-                .receiverName("Swiggy Delivery UPI")
-                .dateTime(LocalDate.now())
-                .transactionId("UPI/" + randomTxn)
+                .valid(false)
+                .message("Could not detect any UPI payment details in the uploaded image. Please upload a clear screenshot of a completed payment.")
+                .receiverName(null)
+                .paidAmount(0.0)
                 .originalImageBase64(base64Image)
-                .autoCategorized(Category.Food)
+                .autoCategorized(Category.Others)
                 .build();
     }
 
@@ -339,20 +376,35 @@ public class GeminiAiService {
         String sender = request != null && request.getSender() != null ? request.getSender() : "UPI";
 
         try {
-            String prompt = "You are an intelligent financial ledger parser. Parse this payment notification or SMS into a raw JSON object with keys: " +
-                    "amount (number), " +
-                    "merchant (string, name of store, person, or service paid), " +
-                    "category (string, one of: Food, Travel, Shopping, Bills, Recharge, Entertainment, Healthcare, Others), " +
-                    "paymentApp (string, e.g. PhonePe, Google Pay, Paytm, HDFC Bank, etc.), " +
-                    "transactionId (string, UTR or reference number if present or N/A), " +
-                    "isDebit (boolean, true if money was spent/debited, false if credited/received), " +
-                    "date (YYYY-MM-DD string). " +
+            String prompt = "You are an intelligent financial ledger parser. Parse this payment notification or SMS.\n" +
+                    "First check: Does this message describe a real financial transaction, payment, debit, or credit?\n" +
+                    "If the message is NOT a payment notification (e.g., OTP message, personal chat, marketing ad, balance inquiry without transaction, or random text):\n" +
+                    "Return ONLY this raw JSON:\n" +
+                    "{\"isValid\": false, \"message\": \"No payment transaction details found in this message.\"}\n\n" +
+                    "If it IS a real payment transaction, return raw JSON with keys:\n" +
+                    "{\"isValid\": true, \"amount\": (number), \"merchant\": (string), \"category\": (one of Food, Travel, Shopping, Bills, Recharge, Entertainment, Healthcare, Others), \"paymentApp\": (string), \"transactionId\": (string or N/A), \"isDebit\": (boolean), \"date\": (YYYY-MM-DD string), \"message\": null}.\n" +
                     "Sender: \"" + sender + "\", Message: \"" + msg.replace("\"", "\\\"") + "\". Return raw JSON only.";
 
             String jsonResponse = callGeminiApiTextOnly(prompt);
             JsonNode root = objectMapper.readTree(jsonResponse);
 
+            boolean isValid = root.path("isValid").asBoolean(true);
             double amount = root.path("amount").asDouble(0.0);
+
+            if (!isValid || amount <= 0) {
+                String errMsg = root.hasNonNull("message") ? root.path("message").asText() :
+                        "No payment details detected. This message does not appear to be a transaction notification.";
+                return NotificationDetectResponseDto.builder()
+                        .valid(false)
+                        .message(errMsg)
+                        .paidAmount(0.0)
+                        .merchant("None")
+                        .paymentApp(sender)
+                        .rawMessage(msg)
+                        .summary("No transaction detected")
+                        .build();
+            }
+
             String merchant = root.path("merchant").asText("Merchant");
             String catStr = root.path("category").asText("Others");
             String paymentApp = root.path("paymentApp").asText(sender);
@@ -368,6 +420,8 @@ public class GeminiAiService {
             }
 
             return NotificationDetectResponseDto.builder()
+                    .valid(true)
+                    .message("Payment detected")
                     .paidAmount(amount)
                     .merchant(merchant)
                     .paymentApp(paymentApp)
@@ -391,7 +445,7 @@ public class GeminiAiService {
 
         double amount = 0.0;
         String merchant = "Merchant";
-        String txnId = "UPI/" + (1000000000L + (long)(Math.random() * 8999999999L));
+        String txnId = "N/A";
         boolean isDebit = true;
 
         // Detect credit vs debit
@@ -409,6 +463,21 @@ public class GeminiAiService {
                 amount = Double.parseDouble(amtStr);
             } catch (Exception ignored) {}
         }
+
+        // If no amount was found in text, do NOT invent fake data
+        if (amount <= 0) {
+            return NotificationDetectResponseDto.builder()
+                    .valid(false)
+                    .message("No payment amount detected in this message. Cannot log as transaction.")
+                    .paidAmount(0.0)
+                    .merchant("None")
+                    .paymentApp(sender)
+                    .rawMessage(msg)
+                    .summary("No payment detected")
+                    .build();
+        }
+
+        txnId = "UPI/" + (1000000000L + (long)(Math.random() * 8999999999L));
 
         // Merchant regex
         java.util.regex.Pattern merchPattern = java.util.regex.Pattern.compile("(?:to|at|paid to|transfer to)\\s+([A-Za-z0-9\\s&'-]+?)(?:\\s+on|\\s+ref|\\s+via|\\s+using|\\s+upi|\\.|,|$)", java.util.regex.Pattern.CASE_INSENSITIVE);
@@ -453,7 +522,9 @@ public class GeminiAiService {
         Category autoCat = resolveCategory(null, merchant);
 
         return NotificationDetectResponseDto.builder()
-                .paidAmount(amount > 0 ? amount : 250.00)
+                .valid(true)
+                .message("Payment detected")
+                .paidAmount(amount)
                 .merchant(merchant)
                 .paymentApp(paymentApp)
                 .transactionId(txnId)
@@ -461,7 +532,7 @@ public class GeminiAiService {
                 .autoCategorized(autoCat)
                 .isDebit(isDebit)
                 .rawMessage(msg)
-                .summary(String.format("Auto-detected %s payment of ₹%.2f to %s", paymentApp, amount > 0 ? amount : 250.00, merchant))
+                .summary(String.format("Auto-detected %s payment of ₹%.2f to %s", paymentApp, amount, merchant))
                 .build();
     }
 
